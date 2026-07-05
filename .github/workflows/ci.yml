@@ -75,12 +75,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create .env for docker compose
+        run: cp .env.example .env
+        # docker compose validates env_file for every service in the compose
+        # file (not just the ones being started), so `docker compose down`
+        # fails without this even though the robot-tests service is never
+        # actually started in CI - no secrets involved, this is the same
+        # placeholder-only file from .env.example.
+
+      - name: Pull Grid images
+        run: docker compose pull selenium-hub chrome
+        # Pulled as its own step so a cold image cache doesn't eat into the
+        # readiness-wait timeout below.
+
       - name: Start minimal Grid (hub + chrome)
         run: docker compose up -d selenium-hub chrome
 
       - name: Wait for Grid hub to be ready
         run: |
-          timeout 60 sh -c \
+          timeout 120 sh -c \
             'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
 
       - uses: actions/setup-python@v5
@@ -122,7 +135,11 @@ jobs:
         if: always()
         run: |
           mkdir -p .pabot-history
-          cp reports/output.xml .pabot-history/output.xml
+          if [ -f reports/output.xml ]; then
+            cp reports/output.xml .pabot-history/output.xml
+          else
+            echo "No reports/output.xml (tests never ran) - nothing to save."
+          fi
 
       - name: Upload Allure results
         if: always()
@@ -147,12 +164,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create .env for docker compose
+        run: cp .env.example .env
+        # docker compose validates env_file for every service in the compose
+        # file (not just the ones being started), so `docker compose down`
+        # fails without this even though the robot-tests service is never
+        # actually started in CI - no secrets involved, this is the same
+        # placeholder-only file from .env.example.
+
+      - name: Pull Grid images
+        run: docker compose pull selenium-hub chrome firefox
+        # Pulled as its own step so a cold image cache doesn't eat into the
+        # readiness-wait timeout below.
+
       - name: Start full Grid (hub + chrome + firefox)
         run: docker compose up -d selenium-hub chrome firefox
 
       - name: Wait for Grid hub to be ready
         run: |
-          timeout 60 sh -c \
+          timeout 120 sh -c \
             'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
 
       - uses: actions/setup-python@v5
@@ -193,7 +223,11 @@ jobs:
         if: always()
         run: |
           mkdir -p .pabot-history
-          cp reports/output.xml .pabot-history/output.xml
+          if [ -f reports/output.xml ]; then
+            cp reports/output.xml .pabot-history/output.xml
+          else
+            echo "No reports/output.xml (tests never ran) - nothing to save."
+          fi
 
       - name: Tear down Grid
         if: always()
