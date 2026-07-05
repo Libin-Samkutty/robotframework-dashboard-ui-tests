@@ -10,10 +10,10 @@
 
 name: Nightly Regression
 
-# on:
-#   schedule:
-#     - cron: "0 2 * * *" # 02:00 UTC
-#   workflow_dispatch: {}
+on:
+  # schedule:
+  #   - cron: "0 2 * * *" # 02:00 UTC
+  workflow_dispatch: {}
 
 jobs:
   regression-grid:
