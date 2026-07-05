@@ -1,189 +1,152 @@
 # Quick Start Guide
 
-Get the dashboard automation tests running in 5 minutes.
+Get the test suite running against https://practice.expandtesting.com in 5 minutes.
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Git
+- A local Chrome or Firefox install (for running `web/` outside Docker) - or
+  Docker + Docker Compose (to run against a Selenium Grid instead)
 
-## Installation (1 minute)
+## Installation
 
 ```bash
-# Clone or download the project
-cd dashboard-ui-tests-demo
+python -m venv .venv
+source .venv/bin/activate      # .venv\Scripts\activate on Windows
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Copy environment template
 cp .env.example .env
 ```
 
-## Configuration (1 minute)
+## Configuration
 
-Edit `.env` with your test environment details:
+`.env.example` already defaults to the real target site and its publicly
+documented practice credentials - no real secrets are required:
 
 ```bash
-# Minimum required changes:
-LOGIN_EMAIL=your_test_email@example.com
-LOGIN_PASSWORD=your_test_password
-API_TOKEN=your_api_token
+BASE_URL=https://practice.expandtesting.com
+NOTES_API_URL=https://practice.expandtesting.com/notes/api
+DEFAULT_USERNAME=practice
+DEFAULT_PASSWORD=SuperSecretPassword!
 ```
 
-## Running Tests (1 minute)
+## Running Tests
 
 ```bash
-# Run all web tests
-robot --argumentfile argfile.robot web/tests/
+# API tests - fastest feedback, no browser needed
+robot api/tests/
 
-# Run specific suite
-robot web/tests/login_suite/
+# Web tests - uses a local browser driver by default
+robot --variable BROWSER:Chrome web/tests/
 
-# Run with production environment
-robot --variable ENV:PROD web/tests/
+# Everything, filtered to the smoke tier
+robot --include @smoke web api
 
-# Run API tests
-robot API/tests/
-
-# Run chatbot tests
-robot chatbot/tests/
+# Against a Selenium Grid instead of a local driver (see docker-compose.yml)
+robot --variable REMOTE_URL:http://localhost:4444/wd/hub --variable BROWSER:chrome web
 ```
 
-## View Results (1 minute)
-
-After tests complete, open the generated report:
+## Running Against Selenium Grid via Docker Compose
 
 ```bash
-open report.html
+docker compose up -d selenium-hub chrome firefox
+docker compose run --rm robot-tests
+docker compose down -v
 ```
 
-Or view detailed logs:
+## View Results
 
 ```bash
-open log.html
+open reports/report.html      # Robot's native report
+open reports/log.html         # keyword-level debug log
+
+# Allure (richer, step-by-step report)
+allure generate reports/allure-results --clean -o reports/allure-report
+allure open reports/allure-report
 ```
 
 ## Learning the Project
 
 1. **Understand Architecture**: Read `docs/POM_ARCHITECTURE.md`
-2. **Add New Tests**: Follow `docs/ADDING_NEW_TESTS.md`
-3. **Verify Compliance**: Check `docs/POM_CHECKLIST.md`
+2. **Add New Tests**: Follow `docs/ADDING_TESTS.md`
+3. **Why this repo is scoped the way it is**: Read `docs/MIGRATION.md`
 
 ## Key Files to Know
 
-- `argfile.robot` - Default test arguments
+- `argfile.robot` - Default test arguments (tags, Allure listener, output dir)
+- `shared/` - Cross-module keywords and test data (env resolution, timeouts, assertions)
 - `web/data/locators/` - UI element selectors
-- `web/resources/pages/*/action.robot` - User actions
-- `web/resources/pages/*/result.robot` - Assertions
-- `web/tests/` - Test cases
+- `web/resources/pages/*/action.robot` - user actions
+- `web/resources/pages/*/result.robot` - assertions
+- `api/resources/common_resources.robot` - Notes API session/auth/CRUD keywords
+- `web/tests/`, `api/tests/` - test cases
 
 ## Common Commands
 
 ```bash
-# Run Smoke tests only
-robot --include Smoke web/tests/
+# Run by priority tag
+robot --include @smoke web api
+robot --include @critical web api
+robot --include @regression web api
 
-# Run with verbose output
+# Verbose output
 robot --loglevel DEBUG web/tests/
 
-# Run specific test
-robot -t "Verify That The User Can Login" web/tests/login_suite/login_page_test.robot
+# Run a specific test
+robot -t "Verify User Can Login With Valid Credentials" web/tests/login_suite/login_page_test.robot
 
-# Run with custom output directory
-robot --outputdir custom_results web/tests/
-
-# Combine multiple test runs
-rebot --merge output*.xml
+# Combine multiple runs (e.g. Chrome + Firefox passes) into one report
+rebot --merge reports/web/output.xml reports/web-firefox/output.xml
 ```
 
 ## Troubleshooting
 
 Browser not found?
 ```bash
-# Install ChromeDriver or geckodriver
-# macOS:
-brew install chromedriver
-
-# Linux:
-sudo apt-get install chromium-chromedriver
-
-# Windows: Download from https://chromedriver.chromium.org/
+# Selenium Manager (bundled with Selenium 4.6+) auto-resolves a matching
+# driver for a locally installed Chrome/Firefox - no manual driver install
+# needed for local runs. For Docker/CI, the Grid supplies the browser instead.
 ```
 
-Module not found?
+Element click intercepted by an ad iframe?
 ```bash
-# Re-install requirements
-pip install --upgrade -r requirements.txt
-
-# Or install specific library
-pip install robotframework-seleniumlibrary==6.1.2
+# practice.expandtesting.com renders live ad iframes that can overlap
+# elements. shared/.../utility_keywords.robot's `Wait For Element And Click`
+# clicks via JavaScript specifically to avoid this - use it instead of the
+# raw `Click Element` keyword.
 ```
 
-Tests not running?
+Selenium Grid node won't register / browser crashes in Docker?
 ```bash
-# Check Python version (must be 3.8+)
-python --version
-
-# Check Robot Framework installation
-robot --version
-
-# Verify dependencies
-pip list | grep -i robot
+# Chrome/Firefox need more than Docker's default 64MB /dev/shm.
+# docker-compose.yml already sets shm_size: 2gb on both nodes - if you're
+# running the images another way, set this explicitly.
 ```
 
 ## Project Structure
 
 ```
-dashboard-ui-tests-demo/
-├── web/          Web dashboard tests
-├── API/          REST API tests
-├── chatbot/      Chatbot tests
-├── docs/         Comprehensive documentation
+robotframework-dashboard-ui-tests-demo/
+├── web/          Web UI tests (login, secure/dashboard area)
+├── api/          Notes API tests (smoke, negative)
+├── shared/       Cross-module keywords and test data
+├── docs/         Documentation
 ├── argfile.robot Default arguments
 └── .env.example  Configuration template
 ```
 
-## Next Steps
-
-1. Run the tests to verify setup
-2. Read the architecture guide (docs/POM_ARCHITECTURE.md)
-3. Add your own tests (docs/ADDING_NEW_TESTS.md)
-4. Customize for your needs
-
-## Support
-
-- Architecture questions: See docs/POM_ARCHITECTURE.md
-- Adding tests: See docs/ADDING_NEW_TESTS.md
-- Compliance: See docs/POM_CHECKLIST.md
-- Project overview: See PROJECT_SUMMARY.md
-
 ## What's Included
 
-Tests:
-- 3 login tests (positive + negative)
-- 6 data-driven scenarios
-- 4 dashboard tests
-- 3 API smoke tests
-- 3 API negative tests
-- 3 chatbot tests
-
-Patterns Demonstrated:
-- Page Object Model
-- BDD-style testing
-- Data-driven testing
-- Environment parameterization
-- Error handling
-- API testing with retry logic
+- Web: login suite (4 tests + 4 data-driven CSV scenarios), secure-area suite (4 tests)
+- API: Notes API smoke (5 tests), negative (5 tests)
+- Selenium Grid via Docker Compose, Allure reporting, Robocop linting in CI
 
 ## Ready to Go
-
-Installation complete. Run your first test:
 
 ```bash
 robot --argumentfile argfile.robot web/tests/login_suite/login_page_test.robot
 ```
 
-Check the generated report.html for results.
-
-Happy testing!
+Check `reports/report.html` for results.

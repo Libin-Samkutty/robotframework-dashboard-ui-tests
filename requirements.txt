@@ -9,3 +9,5 @@ robotframework-pabot>=2.0.0                # Purpose: Parallel test execution fo
 robotframework-jsonlibrary==0.5              # Purpose: JSON parsing and validation in test data
 robotframework-csvlib==1.0.2                # Purpose: CSV file reading/writing for data-driven tests
 robotframework-datadriver==1.11.2           # Purpose: Parameterized test execution from external data files
+allure-robotframework==2.16.0                # Purpose: Allure listener - emits allure-results/ for report generation
+robotframework-robocop==8.3.2                 # Purpose: Static analysis / linting for .robot and .resource files

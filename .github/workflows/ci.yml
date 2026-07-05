@@ -1,0 +1,299 @@
+# ============================================================================
+# GitHub Actions Workflow: CI
+# lint -> smoke-gate -> full-regression against the real practice.expandtesting.com
+# via a Selenium Grid brought up with docker compose.
+#
+# No secrets are required: the login credentials used here are the
+# publicly-documented practice.expandtesting.com demo credentials (not
+# actual secrets), and the Notes API token is obtained dynamically at
+# runtime via registration+login rather than stored statically.
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint Robot Framework sources
+        run: robocop check web api shared
+
+      - name: Check .env.example has no real credential values
+        run: |
+          python - <<'PYEOF'
+          import sys
+
+          # Only credential-shaped KEYS are checked - things like BROWSER=Chrome,
+          # ENV=STAGING, or DEFAULT_TIMEOUT=60 are ordinary config, not secrets,
+          # and were never meant to look like placeholders.
+          credential_key_markers = ("password", "secret", "token", "apikey", "api_key", "credential")
+          placeholders = ("your_", "changeme", "example", "<", "practice", "supersecretpassword")
+          suspicious = []
+          with open(".env.example") as f:
+              for lineno, line in enumerate(f, 1):
+                  stripped = line.strip()
+                  if not stripped or stripped.startswith("#") or "=" not in stripped:
+                      continue
+                  key, _, value = stripped.partition("=")
+                  if not value:
+                      continue
+                  if not any(m in key.lower() for m in credential_key_markers):
+                      continue
+                  if not any(p in value.lower() for p in placeholders):
+                      suspicious.append((lineno, stripped))
+          if suspicious:
+              print("Suspicious non-placeholder credential values in .env.example:")
+              for lineno, line in suspicious:
+                  print(f"  line {lineno}: {line}")
+              sys.exit(1)
+          print(".env.example OK - no real-looking credential values found")
+          PYEOF
+
+  smoke-gate:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env for docker compose
+        run: cp .env.example .env
+        # docker compose validates env_file for every service in the compose
+        # file (not just the ones being started), so `docker compose down`
+        # fails without this even though the robot-tests service is never
+        # actually started in CI - no secrets involved, this is the same
+        # placeholder-only file from .env.example.
+
+      - name: Pull Grid images
+        run: docker compose pull selenium-hub chrome
+        # Pulled as its own step so a cold image cache doesn't eat into the
+        # readiness-wait timeout below.
+
+      - name: Start minimal Grid (hub + chrome)
+        run: docker compose up -d selenium-hub chrome
+
+      - name: Wait for Grid hub to be ready
+        run: |
+          timeout 120 sh -c \
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -Eq "\"ready\":[[:space:]]*true"; do sleep 2; done'
+
+      - name: Dump Grid container status/logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          echo "--- selenium-hub logs ---"
+          docker compose logs selenium-hub
+          echo "--- chrome logs ---"
+          docker compose logs chrome
+          echo "--- raw status endpoint ---"
+          curl -sv http://localhost:4444/wd/hub/status || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore previous run's test timings (for longest-first pabot ordering)
+        uses: actions/cache@v4
+        with:
+          path: .pabot-history/output.xml
+          key: pabot-history-smoke-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            pabot-history-smoke-${{ github.ref_name }}-
+            pabot-history-smoke-
+
+      - name: Generate longest-first pabot ordering from history
+        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+
+      - name: Run smoke suite against the Grid (parallel via pabot)
+        run: |
+          # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
+          # docker-compose.yml - api tests need no Grid slot at all, so this
+          # is a safe upper bound on concurrent web sessions, not a hard cap
+          # on parallelism.
+          pabot --testlevelsplit --pabotlib --processes 3 \
+                --ordering reports/pabot_order.txt \
+                --variable REMOTE_URL:http://localhost:4444/wd/hub \
+                --variable BROWSER:chrome \
+                --listener allure_robotframework:reports/allure-results \
+                --include @smoke \
+                --outputdir reports \
+                web api
+
+      - name: Save test timings for next run's pabot ordering
+        if: always()
+        run: |
+          mkdir -p .pabot-history
+          if [ -f reports/output.xml ]; then
+            cp reports/output.xml .pabot-history/output.xml
+          else
+            echo "No reports/output.xml (tests never ran) - nothing to save."
+          fi
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-smoke
+          path: reports/allure-results/
+          retention-days: 7
+
+      - name: Tear down Grid
+        if: always()
+        run: docker compose down -v
+
+  full-regression:
+    needs: smoke-gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env for docker compose
+        run: cp .env.example .env
+        # docker compose validates env_file for every service in the compose
+        # file (not just the ones being started), so `docker compose down`
+        # fails without this even though the robot-tests service is never
+        # actually started in CI - no secrets involved, this is the same
+        # placeholder-only file from .env.example.
+
+      - name: Pull Grid images
+        run: docker compose pull selenium-hub chrome firefox
+        # Pulled as its own step so a cold image cache doesn't eat into the
+        # readiness-wait timeout below.
+
+      - name: Start full Grid (hub + chrome + firefox)
+        run: docker compose up -d selenium-hub chrome firefox
+
+      - name: Wait for Grid hub to be ready
+        run: |
+          timeout 120 sh -c \
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -Eq "\"ready\":[[:space:]]*true"; do sleep 2; done'
+
+      - name: Dump Grid container status/logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          echo "--- selenium-hub logs ---"
+          docker compose logs selenium-hub
+          echo "--- chrome logs ---"
+          docker compose logs chrome
+          echo "--- firefox logs ---"
+          docker compose logs firefox
+          echo "--- raw status endpoint ---"
+          curl -sv http://localhost:4444/wd/hub/status || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore previous run's test timings (for longest-first pabot ordering)
+        uses: actions/cache@v4
+        with:
+          path: .pabot-history/output.xml
+          key: pabot-history-full-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            pabot-history-full-${{ github.ref_name }}-
+            pabot-history-full-
+
+      - name: Generate longest-first pabot ordering from history
+        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+
+      - name: Run full suite (web + api, parallel via pabot)
+        run: |
+          # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
+          # docker-compose.yml - api tests need no Grid slot at all, so this
+          # is a safe upper bound on concurrent web sessions, not a hard cap
+          # on parallelism.
+          pabot --testlevelsplit --pabotlib --processes 3 \
+                --ordering reports/pabot_order.txt \
+                --variable REMOTE_URL:http://localhost:4444/wd/hub \
+                --variable BROWSER:chrome \
+                --listener allure_robotframework:reports/allure-results \
+                --outputdir reports \
+                web api
+
+      - name: Save test timings for next run's pabot ordering
+        if: always()
+        run: |
+          mkdir -p .pabot-history
+          if [ -f reports/output.xml ]; then
+            cp reports/output.xml .pabot-history/output.xml
+          else
+            echo "No reports/output.xml (tests never ran) - nothing to save."
+          fi
+
+      - name: Tear down Grid
+        if: always()
+        run: docker compose down -v
+
+      - name: Set up JRE for the Allure CLI
+        if: always()
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          curl -fsSL https://github.com/allure-framework/allure2/releases/download/2.44.0/allure-2.44.0.tgz \
+            -o /tmp/allure.tgz
+          sudo tar -xzf /tmp/allure.tgz -C /opt
+          sudo ln -s /opt/allure-2.44.0/bin/allure /usr/local/bin/allure
+
+      - name: Generate Allure report
+        if: always()
+        run: allure generate reports/allure-results --clean -o reports/allure-report
+
+      - name: Upload Allure report artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-full-regression
+          path: reports/allure-report/
+          retention-days: 7
+
+      - name: Comment PR with result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const label = status === 'success' ? 'PASSED' : 'FAILED';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `[${label}] full-regression **${status}** - Allure report attached as an artefact on this run.`
+            });
