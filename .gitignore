@@ -6,6 +6,7 @@
 # Python
 
 venv/
+.venv/
 env/
 __pycache__/
 *.pyc
@@ -23,6 +24,20 @@ report.html
 xunit.xml
 *.xml
 *.html
+
+# Allure - these are also already covered by reports/ above; listed explicitly
+# for clarity and in case allure-results/allure-report are ever generated
+# outside reports/. Note: gitignore only affects local `git add`/`git status` -
+# it has zero effect on CI artifact upload (actions/upload-artifact reads the
+# runner's filesystem directly, regardless of gitignore state).
+allure-results/
+allure-report/
+
+# pabot longest-first ordering history - restored from a CI cache (see
+# scripts/generate_pabot_ordering.py and .github/workflows/ci.yml), never
+# meant to be committed. Already covered by *.xml above; listed explicitly
+# for clarity.
+.pabot-history/
 
 # Screenshots
 

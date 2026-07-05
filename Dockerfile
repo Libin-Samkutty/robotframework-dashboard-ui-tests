@@ -1,41 +1,31 @@
 # ============================================================================
-# Dockerfile for Dashboard UI Tests
-# Builds a container image with Python 3.12, Firefox, and test dependencies
+# Dockerfile - Robot Framework test runner
+# Talks to a Selenium Grid via REMOTE_URL - no local browser is installed in
+# this image. Includes a headless JRE + the Allure CLI for report generation.
 # ============================================================================
 
 FROM python:3.12-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies and Firefox via Mozilla's official APT repo
+ARG ALLURE_VERSION=2.44.0
+
+# Headless JRE (required by the Allure CLI) + curl for the Allure download
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    wget \
-    git \
-    && install -d -m 0755 /etc/apt/keyrings \
-    && curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \
-       -o /etc/apt/keyrings/packages.mozilla.org.asc \
-    && echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
-       > /etc/apt/sources.list.d/mozilla.list \
-    && printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
-       > /etc/apt/preferences.d/mozilla \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends firefox \
+    default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
-# Install geckodriver from GitHub releases
-RUN GECKO_VERSION=$(curl -sL https://api.github.com/repos/mozilla/geckodriver/releases/latest \
-      | grep '"tag_name"' | head -1 | sed 's/.*"\(v[^"]*\)".*/\1/') \
-    && curl -sL "https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/geckodriver-${GECKO_VERSION}-linux64.tar.gz" \
-       | tar -xz -C /usr/local/bin \
-    && chmod +x /usr/local/bin/geckodriver
-
-# Copy requirements
-COPY requirements.txt .
+# Install the Allure CLI from its GitHub release tarball (no APT package exists)
+RUN curl -fsSL "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz" \
+    -o /tmp/allure.tgz \
+    && tar -xzf /tmp/allure.tgz -C /opt \
+    && ln -s /opt/allure-${ALLURE_VERSION}/bin/allure /usr/local/bin/allure \
+    && rm /tmp/allure.tgz
 
 # Install Python dependencies
+COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -43,11 +33,11 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # Create output directories
-RUN mkdir -p reports screenshots
+RUN mkdir -p reports/allure-results reports/allure-report screenshots
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV ROBOT_FRAMEWORK=true
+ENV REMOTE_URL=""
 
-# Default command: run all tests
-CMD ["robot", "--variable", "ENV:STAGING", "--outputdir", "reports", "."]
+# Default command: run the smoke suite against the Grid via argfile.robot.
+# Override with: docker compose run robot-tests robot <args> <path>
+CMD ["robot", "--argumentfile", "argfile.robot", "web", "api"]

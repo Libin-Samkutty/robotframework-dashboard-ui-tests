@@ -1,0 +1,235 @@
+# ============================================================================
+# GitHub Actions Workflow: CI
+# lint -> smoke-gate -> full-regression against the real practice.expandtesting.com
+# via a Selenium Grid brought up with docker compose.
+#
+# No secrets are required: the login credentials used here are the
+# publicly-documented practice.expandtesting.com demo credentials (not
+# actual secrets), and the Notes API token is obtained dynamically at
+# runtime via registration+login rather than stored statically.
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint Robot Framework sources
+        run: robocop check web api shared
+
+      - name: Check .env.example has no real values
+        run: |
+          python - <<'PYEOF'
+          import sys
+
+          placeholders = ("your_", "changeme", "example", "<", "practice", "superSecretPassword".lower())
+          suspicious = []
+          with open(".env.example") as f:
+              for lineno, line in enumerate(f, 1):
+                  stripped = line.strip()
+                  if not stripped or stripped.startswith("#") or "=" not in stripped:
+                      continue
+                  key, _, value = stripped.partition("=")
+                  if not value:
+                      continue
+                  if not any(p in value.lower() for p in placeholders):
+                      suspicious.append((lineno, stripped))
+          if suspicious:
+              print("Suspicious non-placeholder values in .env.example:")
+              for lineno, line in suspicious:
+                  print(f"  line {lineno}: {line}")
+              sys.exit(1)
+          print(".env.example OK - no real-looking values found")
+          PYEOF
+
+  smoke-gate:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start minimal Grid (hub + chrome)
+        run: docker compose up -d selenium-hub chrome
+
+      - name: Wait for Grid hub to be ready
+        run: |
+          timeout 60 sh -c \
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore previous run's test timings (for longest-first pabot ordering)
+        uses: actions/cache@v4
+        with:
+          path: .pabot-history/output.xml
+          key: pabot-history-smoke-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            pabot-history-smoke-${{ github.ref_name }}-
+            pabot-history-smoke-
+
+      - name: Generate longest-first pabot ordering from history
+        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+
+      - name: Run smoke suite against the Grid (parallel via pabot)
+        run: |
+          # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
+          # docker-compose.yml - api tests need no Grid slot at all, so this
+          # is a safe upper bound on concurrent web sessions, not a hard cap
+          # on parallelism.
+          pabot --testlevelsplit --pabotlib --processes 3 \
+                --ordering reports/pabot_order.txt \
+                --variable REMOTE_URL:http://localhost:4444/wd/hub \
+                --variable BROWSER:chrome \
+                --listener allure_robotframework:reports/allure-results \
+                --include @smoke \
+                --outputdir reports \
+                web api
+
+      - name: Save test timings for next run's pabot ordering
+        if: always()
+        run: |
+          mkdir -p .pabot-history
+          cp reports/output.xml .pabot-history/output.xml
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-smoke
+          path: reports/allure-results/
+          retention-days: 7
+
+      - name: Tear down Grid
+        if: always()
+        run: docker compose down -v
+
+  full-regression:
+    needs: smoke-gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start full Grid (hub + chrome + firefox)
+        run: docker compose up -d selenium-hub chrome firefox
+
+      - name: Wait for Grid hub to be ready
+        run: |
+          timeout 60 sh -c \
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore previous run's test timings (for longest-first pabot ordering)
+        uses: actions/cache@v4
+        with:
+          path: .pabot-history/output.xml
+          key: pabot-history-full-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            pabot-history-full-${{ github.ref_name }}-
+            pabot-history-full-
+
+      - name: Generate longest-first pabot ordering from history
+        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+
+      - name: Run full suite (web + api, parallel via pabot)
+        run: |
+          # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
+          # docker-compose.yml - api tests need no Grid slot at all, so this
+          # is a safe upper bound on concurrent web sessions, not a hard cap
+          # on parallelism.
+          pabot --testlevelsplit --pabotlib --processes 3 \
+                --ordering reports/pabot_order.txt \
+                --variable REMOTE_URL:http://localhost:4444/wd/hub \
+                --variable BROWSER:chrome \
+                --listener allure_robotframework:reports/allure-results \
+                --outputdir reports \
+                web api
+
+      - name: Save test timings for next run's pabot ordering
+        if: always()
+        run: |
+          mkdir -p .pabot-history
+          cp reports/output.xml .pabot-history/output.xml
+
+      - name: Tear down Grid
+        if: always()
+        run: docker compose down -v
+
+      - name: Set up JRE for the Allure CLI
+        if: always()
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          curl -fsSL https://github.com/allure-framework/allure2/releases/download/2.44.0/allure-2.44.0.tgz \
+            -o /tmp/allure.tgz
+          sudo tar -xzf /tmp/allure.tgz -C /opt
+          sudo ln -s /opt/allure-2.44.0/bin/allure /usr/local/bin/allure
+
+      - name: Generate Allure report
+        if: always()
+        run: allure generate reports/allure-results --clean -o reports/allure-report
+
+      - name: Upload Allure report artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-full-regression
+          path: reports/allure-report/
+          retention-days: 7
+
+      - name: Comment PR with result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const label = status === 'success' ? 'PASSED' : 'FAILED';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `[${label}] full-regression **${status}** - Allure report attached as an artefact on this run.`
+            });

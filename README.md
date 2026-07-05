@@ -1,8 +1,15 @@
-# Dashboard UI Tests Demo
+# Robot Framework Automation - practice.expandtesting.com
 
-[![CI](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/run-tests.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/run-tests.yml)
+[![CI](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/ci.yml)
+[![Nightly Regression](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/nightly.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/nightly.yml)
 
-Robot Framework test automation framework for web dashboards, chatbots, and REST APIs. Includes smoke tests, architecture patterns, Docker containerization, and GitHub Actions CI/CD.
+Robot Framework test automation targeting the real public site
+[practice.expandtesting.com](https://practice.expandtesting.com) - web UI
+login/secure-area regression and Notes REST API smoke/negative coverage.
+Runs against a Selenium Grid via Docker Compose, reports through both
+Robot's native HTML output and Allure, and is paired with a sibling
+Playwright repo that targets the same site (see
+[docs/MIGRATION.md](docs/MIGRATION.md) for the story behind the pairing).
 
 ## Contents
 
@@ -11,26 +18,29 @@ Robot Framework test automation framework for web dashboards, chatbots, and REST
 3. [Prerequisites](#prerequisites)
 4. [Quick Start](#quick-start)
 5. [Project Structure](#project-structure)
-6. [Architecture & Design Patterns](#architecture--design-patterns)
-7. [Best Practices Demonstrated](#best-practices-demonstrated)
-8. [Running Tests](#running-tests)
-9. [Docker Setup](#docker-setup)
-10. [CI/CD Integration](#cicd-integration)
-11. [Merging Reports](#merging-reports)
+6. [Architecture](#architecture)
+7. [Running Tests](#running-tests)
+8. [Docker Setup](#docker-setup)
+9. [CI/CD](#cicd)
+10. [Reporting](#reporting)
+11. [Coverage](#coverage)
 12. [Adding New Tests](#adding-new-tests)
-13. [Reports](#reports)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Project Overview
 
-Covers three test domains:
+Two test domains, both against the same real system under test:
 
-- **Web Dashboard** — UI testing via SeleniumLibrary (Chrome/Firefox)
-- **Chatbot** — WhatsApp bot flows (onboarding, menu, conversation)
-- **REST API** — Endpoint validation and health checks
+- **Web** - login page and the post-login `/secure` area, via SeleniumLibrary
+- **API** - the Notes REST API (`/notes/api`) - health check, auth, CRUD, and
+  negative-path coverage, via RequestsLibrary
 
-Implements Page Object Model with parameterized environments (staging/production), reusable keywords, timestamped HTML reports, Docker containerization, and GitHub Actions CI/CD.
+Page Object Model with an action/result split per page, a `shared/` layer for
+cross-module keywords and test data, Selenium Grid via Docker Compose, Allure
++ native Robot reporting, and a GitHub Actions pipeline gated by Robocop lint
+and a smoke-tier tag.
 
 ---
 
@@ -38,569 +48,338 @@ Implements Page Object Model with parameterized environments (staging/production
 
 | Component | Technology |
 |---|---|
-| Test Framework | Robot Framework 7.1+ |
-| Web Automation | SeleniumLibrary |
+| Test Framework | Robot Framework 7.1 |
+| Web Automation | SeleniumLibrary, via Selenium Grid |
 | API Testing | RequestsLibrary |
-| Chatbot Testing | SeleniumLibrary (WhatsApp Web) |
-| Output Management | Robot Framework's built-in reporting |
-| Containerization | Docker & Docker Compose |
+| Data-Driven Testing | DataDriver (CSV) |
+| Test Data Generation | FakerLibrary |
+| Linting | Robocop |
+| Reporting | Robot's native HTML report/log + Allure |
+| Containerization | Docker & Docker Compose (Selenium Grid) |
 | CI/CD | GitHub Actions |
 
 ---
 
 ## Prerequisites
 
-- Python 3.12+
-- Chrome or Firefox
-- ChromeDriver or GeckoDriver
-- Docker and Docker Compose (optional)
+- Python 3.10+
+- For local (non-Docker) web test runs: a local Chrome or Firefox install -
+  Selenium 4.6+'s bundled Selenium Manager auto-resolves a matching driver,
+  no manual driver install needed
+- Docker + Docker Compose - to run against a Selenium Grid instead
 
 ---
 
 ## Quick Start
 
-### 1. Clone Repository
-
 ```bash
-git clone https://github.com/your-org/dashboard-ui-tests-demo.git
-cd dashboard-ui-tests-demo
-```
+python -m venv .venv
+source .venv/bin/activate      # .venv\Scripts\activate on Windows
 
-### 2. Configure Environment
-
-```bash
+pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` with credentials and URLs:
+`.env.example` already points at the real target site with its publicly
+documented practice credentials - nothing sensitive to fill in:
 
 ```bash
-LOGIN_EMAIL=test@yourdomain.com
-LOGIN_PASSWORD=your_secure_password
-BASE_URL_STAGING=https://staging.yourdomain.com
-BASE_URL_PROD=https://app.yourdomain.com
-AUTOMATION_USER_CONTACT=+1234567890
-API_TOKEN=your_api_token_here
-BROWSER=Chrome
-ENV=STAGING
-COUNTRY=INDIA
+BASE_URL=https://practice.expandtesting.com
+NOTES_API_URL=https://practice.expandtesting.com/notes/api
+DEFAULT_USERNAME=practice
+DEFAULT_PASSWORD=SuperSecretPassword!
 ```
-
-### 3. Install Dependencies
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install --upgrade pip
-pip install -r requirements.txt
+# API tests - fastest feedback
+robot api/tests/
+
+# Web tests - local browser
+robot --variable BROWSER:Chrome web/tests/
+
+# Everything, smoke tier only
+robot --include @smoke web api
 ```
 
-### 4. Run Tests
-
-**Web (Login) Tests:**
-```bash
-robot web/tests/login_suite/
-```
-
-**Chatbot Tests:**
-```bash
-robot chatbot/tests/stage/smoke/
-```
-
-**API Tests:**
-```bash
-robot API/tests/smoke/
-```
-
-**All Tests:**
-```bash
-robot .
-```
-
-Reports are generated in `reports/` directory with timestamp.
+See [docs/QUICK_START.md](docs/QUICK_START.md) for the full walkthrough.
 
 ---
 
 ## Project Structure
 
 ```
-dashboard-ui-tests-demo/
-│
-├── README.md                          # This file
-├── requirements.txt                   # Python dependencies (with comments)
-├── .env.example                       # Environment variables template
-├── .gitignore                         # Git ignore configuration
-├── argfile.robot                      # Robot Framework argument file
-├── NameOutputDir.py                   # Helper: generates timestamped output dirs
-├── Dockerfile                         # Container image for test execution
-├── docker-compose.yml                 # Docker Compose configuration
-│
-├── .github/
-│   └── workflows/
-│       └── run-tests.yml              # GitHub Actions CI/CD pipeline (includes rebot merge job)
-│
-├── web/                               # Web Dashboard Tests
+robotframework-dashboard-ui-tests-demo/
+├── web/
 │   ├── data/
-│   │   ├── common_properties.robot    # Browser settings, timeouts, variables
+│   │   ├── common_properties.robot
 │   │   ├── locators/
-│   │   │   ├── login_page_locators.robot       # Login UI element locators
-│   │   │   └── dashboard_page_locators.robot   # Dashboard UI element locators
+│   │   │   ├── login_page_locators.robot
+│   │   │   └── dashboard_page_locators.robot     # models the /secure page
 │   │   └── testdata/
-│   │       ├── contents.robot                  # UI text constants
-│   │       ├── login_credentials.csv           # Data-driven test data
-│   │       ├── stage/
-│   │       │   ├── stage_testdata.robot        # Staging URL & test data
-│   │       │   └── login_testdata.robot        # Login credentials (from env)
-│   │       └── prod/
-│   │           └── prod_testdata.robot         # Production URL & test data
-│   │
+│   │       ├── login_credentials.csv
+│   │       ├── stage/stage_testdata.robot
+│   │       └── prod/prod_testdata.robot
 │   ├── resources/
-│   │   ├── common_resources.robot              # Shared browser setup keywords
-│   │   ├── utilities/
-│   │   │   └── utility_keywords.robot          # Date/time/Faker/helper functions
-│   │   └── pages/
-│   │       ├── login_resource/
-│   │       │   ├── login_action.robot          # Login interaction keywords
-│   │       │   └── login_result.robot          # Login assertion keywords
-│   │       └── dashboard_resource/
-│   │           ├── dashboard_action.robot      # Dashboard interaction keywords
-│   │           └── dashboard_result.robot      # Dashboard assertion keywords
-│   │
+│   │   ├── common_resources.robot
+│   │   ├── pages/
+│   │   │   ├── login_resource/{login_action,login_result}.robot
+│   │   │   └── dashboard_resource/{dashboard_action,dashboard_result}.robot
+│   │   └── utilities/utility_keywords.robot
 │   └── tests/
-│       ├── __init__.robot
-│       ├── login_suite/
-│       │   ├── __init__.robot
-│       │   ├── login_page_test.robot           # Smoke test: valid login
-│       │   └── login_data_driven_test.robot    # Data-driven login tests
-│       └── dashboard_suite/
-│           ├── __init__.robot
-│           └── dashboard_page_test.robot       # Dashboard UI tests
+│       ├── login_suite/{login_page_test,login_data_driven_test}.robot
+│       └── dashboard_suite/dashboard_page_test.robot
 │
-├── chatbot/                           # WhatsApp Chatbot Tests
+├── api/
 │   ├── data/
-│   │   ├── common_properties.robot    # WhatsApp locators & variables
-│   │   └── testdata/
-│   │       └── stage/
-│   │           └── stage_testdata.robot        # Generic bot responses & keywords
-│   │
+│   │   ├── common_properties.robot
+│   │   └── testdata/common_error_messages.robot
 │   ├── resources/
-│   │   ├── common_resources.robot     # Core WhatsApp keywords (send, receive)
-│   │   └── stage/
-│   │       └── smoke/
-│   │           └── smoke_suite_resource.robot  # Onboarding & menu flow keywords
-│   │
+│   │   ├── common_resources.robot                # Notes API session/auth/CRUD
+│   │   └── utilities/utility_keywords.robot
 │   └── tests/
-│       ├── __init__.robot
-│       └── stage/
-│           ├── __init__.robot
-│           └── smoke/
-│               ├── __init__.robot
-│               └── Verify_Smoke_Suite.robot    # Chatbot smoke tests
+│       ├── smoke/Verify_Smoke_Scenarios.robot
+│       └── negative/Verify_Error_Responses.robot
 │
-└── API/                               # REST API Tests
-    ├── data/
-    │   ├── common_properties.robot    # Base URL, timeouts, auth headers
-    │   └── testdata/
-    │       └── common_error_messages.robot     # Expected error messages
-    │
-    ├── resources/
-    │   ├── common_resources.robot     # RequestsLibrary session & request helpers
-    │   └── utilities/
-    │       └── utility_keywords.robot          # JSON/retry/polling helpers
-    │
-    └── tests/
-        ├── __init__.robot
-        ├── smoke/
-        │   ├── __init__.robot
-        │   └── Verify_Smoke_Scenarios.robot    # API smoke tests
-        └── negative/
-            ├── __init__.robot
-            └── Verify_Error_Responses.robot    # API negative tests (401, 404, 400)
+├── shared/                                        # cross-module keywords/data
+│   ├── keywords/{common_keywords,assertion_keywords}.robot
+│   └── test_data/shared_testdata.robot
+│
+├── .github/workflows/
+│   ├── ci.yml                                     # lint -> smoke-gate -> full-regression
+│   └── nightly.yml                                # Grid regression + GitHub Pages
+│
+├── docs/
+│   ├── QUICK_START.md
+│   ├── POM_ARCHITECTURE.md
+│   ├── ADDING_TESTS.md
+│   └── MIGRATION.md
+│
+├── argfile.robot
+├── requirements.txt
+├── robocop.toml
+├── Dockerfile
+├── docker-compose.yml
+├── Jenkinsfile
+└── .env.example
 ```
 
-### Directory Structure
-
-- **`data/`** — Test data, variables, and locators
-  - `common_properties.robot` — Global settings, browser config, timeouts
-  - `locators/` — XPath/CSS selectors
-  - `testdata/` — Test data organized by environment
-
-- **`resources/`** — Reusable keywords
-  - `pages/` — Page Object Model (locators, actions, assertions)
-  - `utilities/` — Helper functions
-  - `common_resources.robot` — Shared keywords
-
-- **`tests/`** — Test cases by feature
-  - Call keywords from `resources/`
-  - Reference data from `data/`
+There is no `chatbot/` module - see
+[docs/MIGRATION.md](docs/MIGRATION.md#note-chatbot-module-retirement) for why.
 
 ---
 
-## Architecture & Design Patterns
+## Architecture
 
-### 1. Page Object Model (POM)
+Full detail in [docs/POM_ARCHITECTURE.md](docs/POM_ARCHITECTURE.md). In
+short: `shared/` holds cross-module keywords and test data (environment
+resolution, timeouts, generic assertions) so `web/` and `api/` don't each
+redefine them; each module then follows `data/` (locators + testdata) →
+`resources/` (action/result keywords) → `tests/` (test cases).
 
-Separates test logic from UI element locators and interaction details.
-
-**Structure:**
-- **Locators** — Element selectors (XPath, CSS)
-- **Actions** — User interactions (click, type, login)
-- **Results** — Assertions and validations
-
-**Example:**
-
-```robot
-# web/data/locators/login_page_locators.robot
-${email_field}         //input[@name="email"]
-${password_field}      //input[@name="password"]
-${submit_button}       //button[@type="submit"]
-
-# web/resources/pages/login_resource/login_action.robot
-User enters email
-    [Arguments]    ${email}
-    Wait Until Element Is Visible    ${email_field}    ${default_timeout}
-    Input Text    ${email_field}    ${email}
-
-# web/resources/pages/login_resource/login_result.robot
-Login should be successful
-    Wait Until Page Contains    ${DASHBOARD_TITLE}    ${default_timeout}
-```
-
-### 2. Three-Layer Architecture
-
-Tests → Resources → Data
-
-Hierarchy enables localized changes, keyword reuse, and readable test syntax.
-
-### 3. Environment Parameterization
-
-Pass environment variables to execute tests against staging or production:
-
-```bash
-robot -v ENV:STAGING web/tests/
-robot -v ENV:PROD web/tests/
-```
-
-Environment data in `.env` and `testdata/{stage,prod}/` directories.
-
-### 4. BDD-style Syntax
-
-Test cases follow Given/When/Then pattern:
-
-```robot
-*** Test Cases ***
-Verify User Can Login Successfully
-    Given User opens the application
-    And User should see the login popup
-    When User enters valid credentials
-    And User clicks submit
-    Then User should be on the dashboard
-
-*** Keywords ***
-User opens the application
-    Open Browser    ${BASE_URL}    ${BROWSER}
-```
-
-### 5. Timestamped Output Directories
-
-`NameOutputDir.py` creates timestamped report paths: `reports/YYYY-MM-DD/HH-MM-SS/`
-
-Invoke with:
-```bash
-robot --outputdir `python NameOutputDir.py` web/tests/
-```
-
----
-
-## Best Practices Demonstrated
-
-Implemented patterns:
-
-| Practice | Location | Purpose |
-|---|---|---|
-| **Page Object Model** | `web/data/locators/`, `web/resources/pages/` | Separates locators, actions, and assertions |
-| **BDD-style Testing** | All `tests/` files | Given/When/Then syntax for readability |
-| **Data-driven Tests** | `web/tests/login_suite/login_data_driven_test.robot` | Uses DataDriver CSV for multiple test scenarios |
-| **Dynamic Test Data** | `web/resources/utilities/utility_keywords.robot` | FakerLibrary generates unique test data |
-| **Environment Parameterization** | `common_properties.robot`, CLI `--variable` | Same tests run against staging/production |
-| **Retry Logic** | `API/resources/utilities/utility_keywords.robot` | `Wait Until Keyword Succeeds` for resilience |
-| **Structured Arguments** | `argfile.robot` | Single config file for consistent invocation |
-| **Suite Metadata** | `__init__.robot` files | Documentation and metadata at suite level |
-| **Separation of Concerns** | `data/`, `resources/`, `tests/` | Three-layer architecture for maintainability |
-| **Error Handling** | `API/tests/negative/` | Tests for 401, 404, 400 error scenarios |
-| **Report Merging** | `.github/workflows/run-tests.yml` | `rebot` combines multiple test runs |
-| **Secrets Management** | `.env.example`, `%{VAR}` syntax | No hardcoded credentials in code |
-| **Return Values** | `chatbot/resources/common_resources.robot` | Keywords return data instead of using globals |
-| **Locator Centralization** | `data/locators/` | All XPath/CSS in one place |
-| **Scalable Structure** | All modules | Easy to add new test suites by following patterns |
+Web tests reach the site through a Selenium Grid (`SeleniumLibrary` → Grid
+hub → Chrome/Firefox node → practice.expandtesting.com); API tests talk to
+the Notes API directly via `RequestsLibrary` - no Grid involved for `api/`.
 
 ---
 
 ## Running Tests
 
-### Using Argument File
-
-Execute tests with `argfile.robot` for standardized configuration:
-
 ```bash
-# Run all web tests with argument file
-robot --argumentfile argfile.robot web/tests/
+# By tag tier
+robot --include @smoke web api
+robot --include @critical web api
+robot --include @regression web api
 
-# Override variables from argument file
-robot --argumentfile argfile.robot --variable ENV:PROD web/tests/
-
-# Run dashboard tests specifically
-robot --argumentfile argfile.robot web/tests/dashboard_suite/
-```
-
-### Run by Module
-
-```bash
-# Web dashboard tests
+# By module
 robot web/tests/
+robot api/tests/
 
-# Chatbot tests
-robot chatbot/tests/
+# Against a Selenium Grid
+robot --variable REMOTE_URL:http://localhost:4444/wd/hub --variable BROWSER:chrome web
 
-# API tests (both smoke and negative)
-robot API/tests/
+# Parallel (pabot) - splits at test level, one process per test
+pabot --testlevelsplit --pabotlib --processes 4 web api
+
+# Lint
+robocop check web api shared
 ```
 
-### Run by Tag
+Every test case carries at least one of `@smoke`, `@critical`, or
+`@regression`.
+
+### Parallel execution with pabot
+
+`--testlevelsplit` runs every test case as its own pabot "item" instead of
+splitting per suite file - with only 4 suite files today, per-suite splitting
+caps parallelism at 4 workers; per-test splitting scales with the test count
+instead.
+
+Each item runs as its own `robot` subprocess (this is how pabot itself
+works - not a repo-specific choice), so Suite Setup/Teardown re-run per test
+rather than once per suite. Two places in this repo are built to survive
+that:
+
+- **`api/tests/smoke/`** used to share one registered Notes API user and one
+  note id across the whole suite via `Suite Variable`. Under
+  `--testlevelsplit` those variables don't survive between tests (each test
+  is its own isolated suite), so the update/delete test now creates its own
+  note, and the shared test user is registered through PabotLib instead -
+  see below.
+- **`--pabotlib`** enables PabotLib's cross-process coordination. `Ensure
+  Shared API Test User` (`api/resources/common_resources.robot`) uses
+  `Run Only Once` so exactly one registration call happens for the *entire*
+  parallel run, no matter how many processes are used; every test still logs
+  in for itself (cheap - no new account), and `Run Teardown Only Once`
+  deletes that one shared account after every process has finished with it.
+
+Run `pabot --testlevelsplit --pabotlib --processes 4 api` twice and diff the
+registration/deletion keyword counts in `log.html` to see this directly: 10
+tests across 4 processes, but exactly one `Register Shared API Test User`
+and one `Delete Shared API Test User` call.
+
+`scripts/generate_pabot_ordering.py` reads a previous run's `output.xml` (if
+one exists - CI restores it from a cache, see `ci.yml`) and writes a pabot
+`--ordering` file listing tests slowest-first, so the historically slowest
+tests get scheduled onto a free worker immediately instead of queuing up
+behind faster ones near the end of the run:
 
 ```bash
-robot --include Smoke .
-robot --exclude Slow .
-robot --variable ENV:STAGING web/tests/
-robot --include Dashboard web/tests/
+python scripts/generate_pabot_ordering.py reports/output.xml reports/pabot_order.txt
+pabot --testlevelsplit --pabotlib --processes 4 --ordering reports/pabot_order.txt web api
 ```
 
-### Data-driven Tests
-
-Run parameterized login tests with multiple credentials:
-
-```bash
-# Data-driven login tests from CSV
-robot web/tests/login_suite/login_data_driven_test.robot
-```
-
-### Run Specific Test
-
-```bash
-robot web/tests/login_suite/login_page_test.robot::Verify\ Dashboard\ Loads\ After\ Successful\ Login
-```
-
-### Parallel Execution
-
-```bash
-pip install robotframework-pabot
-pabot -n 4 .
-```
-
-### Full Example with Output Directory
-
-```bash
-robot \
-  --argumentfile argfile.robot \
-  --variable ENV:STAGING \
-  --variable COUNTRY:INDIA \
-  --outputdir `python NameOutputDir.py` \
-  .
-```
+With no history file yet (first run, or a cold CI cache), the script writes
+an empty ordering file and pabot just runs everything in its default order -
+nothing is skipped, ordering only kicks in once history exists.
 
 ---
 
 ## Docker Setup
 
-### Build Image
+`docker-compose.yml` brings up a Selenium Grid (`selenium-hub` + `chrome` +
+`firefox` nodes) plus a `robot-tests` service that talks to it over the
+Docker network via `REMOTE_URL`:
 
 ```bash
-docker build -t dashboard-ui-tests-demo .
+# Full stack - runs the default smoke suite
+docker compose up --build
+
+# Bring up just the Grid, then run tests from the host against it
+docker compose up -d selenium-hub chrome firefox
+robot --variable REMOTE_URL:http://localhost:4444/wd/hub --variable BROWSER:chrome web
+
+# Run a specific suite inside the container
+docker compose run --rm robot-tests robot --include @smoke web api
+
+docker compose down -v
 ```
 
-### Run Tests in Container
+Chrome/Firefox nodes are given `shm_size: 2gb` - Docker's default 64MB
+`/dev/shm` is a common cause of browser crashes under Selenium Grid.
 
-```bash
-docker run \
-  --env-file .env \
-  -v $(pwd)/reports:/app/reports \
-  dashboard-ui-tests-demo
-```
-
-### Using Docker Compose
-
-```bash
-# Copy .env.example to .env and fill in values
-cp .env.example .env
-
-# Run tests
-docker-compose up
-
-# Run specific module
-docker-compose run tests robot web/tests/
-```
-
-docker-compose.yml loads `.env`, mounts `reports/` volume, includes Firefox and Python 3.12 with dependencies.
+The `robot-tests` image has no browser installed - it's a pure Grid client.
+It does include a headless JRE and the Allure CLI so `allure generate` can
+run inside the container too.
 
 ---
 
-## CI/CD Integration
+## CI/CD
 
-### GitHub Actions
+**`ci.yml`** - runs on every push and PR:
+- `lint` - `robocop check web api shared` + a check that `.env.example`
+  contains no real-looking (non-placeholder) values
+- `smoke-gate` (needs `lint`) - brings up a minimal Grid (hub + chrome), runs
+  `--include @smoke`, uploads raw Allure results
+- `full-regression` (needs `smoke-gate`, PR only) - full Grid (chrome +
+  firefox), runs everything, generates and uploads a rendered Allure report,
+  comments the result on the PR
 
-Workflow configuration in `.github/workflows/run-tests.yml`:
+**`nightly.yml`** - scheduled at 02:00 UTC (+ manual dispatch): full Grid run
+on Chrome then Firefox, combined Allure report published to GitHub Pages via
+the `gh-pages` branch, opens a GitHub issue on failure.
 
-1. Triggers on push to `main` and pull requests
-2. Matrix strategy for STAGING and PROD environments
-3. Steps: checkout, Python 3.12 setup, dependency install, test execution, artifact upload
+> **One-time manual step**: after `nightly.yml`'s first successful run
+> creates the `gh-pages` branch, go to **Settings → Pages → Build and
+> deployment → Source** and select the `gh-pages` branch. This can't be done
+> from the workflow itself.
 
-**Workflow File:**
+No secrets are configured or required: the web login credentials are
+practice.expandtesting.com's own publicly documented demo credentials, and
+the Notes API auth token is obtained dynamically at runtime via
+registration + login rather than stored statically.
 
-```yaml
-name: Run Tests
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: [STAGING, PROD]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Run tests
-        env:
-          LOGIN_EMAIL: ${{ secrets.LOGIN_EMAIL }}
-          LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
-          BASE_URL_STAGING: ${{ secrets.BASE_URL_STAGING }}
-          BASE_URL_PROD: ${{ secrets.BASE_URL_PROD }}
-        run: |
-          python -m robot --variable ENV:${{ matrix.env }} .
-      - name: Upload reports
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-reports-${{ matrix.env }}
-          path: reports/
-```
-
-**Add secrets in GitHub:**
-Settings → Secrets & Variables → Actions → Add:
-- `LOGIN_EMAIL`
-- `LOGIN_PASSWORD`
-- `BASE_URL_STAGING`
-- `BASE_URL_PROD`
+**`Jenkinsfile`** - an illustrative lint → smoke → Allure-report pipeline,
+included to show the suite isn't tied to GitHub Actions; not wired to a live
+Jenkins instance for this repo.
 
 ---
 
-## Merging Reports
-
-Combine test output files from multiple environments using `rebot`:
-
-### Local Report Merging
+## Reporting
 
 ```bash
-# Run tests for both environments separately
-robot --outputdir reports/staging --variable ENV:STAGING .
-robot --outputdir reports/prod --variable ENV:PROD .
+# Robot's native reports (always generated)
+open reports/report.html
+open reports/log.html
 
-# Merge reports using rebot
-rebot \
-  --outputdir reports/merged \
-  --name "Dashboard UI Tests - All Environments" \
-  reports/staging/output.xml \
-  reports/prod/output.xml
+# Allure (richer, step-by-step, matches the sibling Playwright repo's reporting)
+allure generate reports/allure-results --clean -o reports/allure-report
+allure open reports/allure-report
 ```
 
-### GitHub Actions Automatic Merging
+`argfile.robot` wires the Allure listener in by default
+(`--listener allure_robotframework:reports/allure-results`) and keeps
+Robot's own `--report`/log.html as a debug aid alongside it.
 
-CI/CD workflow includes `merge-reports` job that:
-1. Runs tests against STAGING and PROD
-2. Collects `output.xml` artifacts
-3. Merges with `rebot`
-4. Uploads merged artifact
+---
 
-Provides combined statistics and unified HTML report across environments.
+## Coverage
+
+| Module | Suite | Tests | Tags |
+|---|---|---|---|
+| `web/login_suite` | login page | 4 + 4 (CSV) | `@smoke`, `@critical`, `@regression` |
+| `web/dashboard_suite` | `/secure` area | 4 | `@smoke`, `@critical`, `@regression` |
+| `api/smoke` | Notes API health/auth/CRUD | 5 | `@smoke`, `@critical` |
+| `api/negative` | Notes API 401/404/400 | 5 | `@regression`, `@critical` |
+
+22 test cases total. See [docs/MIGRATION.md](docs/MIGRATION.md) for how this
+compares to the sibling Playwright repo's coverage.
 
 ---
 
 ## Adding New Tests
 
-1. Create test file in `tests/` with Given/When/Then structure
-2. Create action keywords in `resources/pages/{feature}/` (user interactions)
-3. Create result keywords in same directory (assertions)
-4. Add locators to `data/locators/`
-5. Execute tests
-
-Follow existing dashboard_suite structure as template.
-
----
-
-## Reports
-
-### HTML Reports
-
-View generated reports:
-
-```bash
-open reports/*/*/report.html         # macOS
-xdg-open reports/*/*/report.html     # Linux
-start reports/\*\*/report.html       # Windows
-```
-
-Output files: `report.html` (summary), `log.html` (debug), `output.xml` (machine-readable)
-
-### Custom Report Location
-
-```bash
-robot --outputdir custom/path/ web/tests/
-```
-
----
-
-## Contributing
-
-Follow POM pattern. Use descriptive keyword names. Add tags to test cases. Keep test data in `data/` directory.
-
-Before PR submission:
-```bash
-robot .
-grep -r "password\|token\|secret" web/ chatbot/ API/
-```
+See [docs/ADDING_TESTS.md](docs/ADDING_TESTS.md).
 
 ---
 
 ## Troubleshooting
 
-**Tests Timeout:** Increase timeout in `common_properties.robot` (default 60s)
+**Element click intercepted by an ad iframe** - practice.expandtesting.com
+renders live ad iframes that can overlap elements. Use
+`Wait For Element And Click` (JS click) from
+`web/resources/utilities/utility_keywords.robot`, not a raw `Click Element`.
 
-**Element Not Found:** Verify locator in DevTools, update `web/data/locators/`, check page load time
+**Selenium Grid node won't register / browser crashes in Docker** - check
+`shm_size: 2gb` is set on the Chrome/Firefox services.
 
-**Browser Crashes:** Update chromedriver/geckodriver or run headless mode
+**DataDriver "Unassigned required argument" error** - the CSV's first column
+header must be the literal string `*** Test Cases ***`, and comma-delimited
+files need `dialect=excel` in the `Library DataDriver` import (its own
+default dialect is semicolon-delimited).
 
-**Docker Build Fails:** Verify Dockerfile permissions and Docker daemon state
-
----
-
-## Support
-
-File GitHub issues for bugs and feature requests.
+**Tests timeout** - adjust `${default_timeout}` in
+`shared/test_data/shared_testdata.robot`.
 
 ---
 
 ## License
 
-MIT License — See LICENSE file for details.
-
----
+MIT License - see LICENSE file for details.
 
 ## References
 
 - [Robot Framework Documentation](https://robotframework.org/)
 - [SeleniumLibrary Documentation](https://robotframework.org/SeleniumLibrary/)
 - [RequestsLibrary Documentation](https://github.com/MarketSquare/robotframework-requests)
+- [Robocop Documentation](https://robotframework-robocop.readthedocs.io/)
+- [Allure Report](https://allurereport.org/)
