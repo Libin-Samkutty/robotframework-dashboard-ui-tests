@@ -37,12 +37,16 @@ jobs:
       - name: Lint Robot Framework sources
         run: robocop check web api shared
 
-      - name: Check .env.example has no real values
+      - name: Check .env.example has no real credential values
         run: |
           python - <<'PYEOF'
           import sys
 
-          placeholders = ("your_", "changeme", "example", "<", "practice", "superSecretPassword".lower())
+          # Only credential-shaped KEYS are checked - things like BROWSER=Chrome,
+          # ENV=STAGING, or DEFAULT_TIMEOUT=60 are ordinary config, not secrets,
+          # and were never meant to look like placeholders.
+          credential_key_markers = ("password", "secret", "token", "apikey", "api_key", "credential")
+          placeholders = ("your_", "changeme", "example", "<", "practice", "supersecretpassword")
           suspicious = []
           with open(".env.example") as f:
               for lineno, line in enumerate(f, 1):
@@ -52,14 +56,16 @@ jobs:
                   key, _, value = stripped.partition("=")
                   if not value:
                       continue
+                  if not any(m in key.lower() for m in credential_key_markers):
+                      continue
                   if not any(p in value.lower() for p in placeholders):
                       suspicious.append((lineno, stripped))
           if suspicious:
-              print("Suspicious non-placeholder values in .env.example:")
+              print("Suspicious non-placeholder credential values in .env.example:")
               for lineno, line in suspicious:
                   print(f"  line {lineno}: {line}")
               sys.exit(1)
-          print(".env.example OK - no real-looking values found")
+          print(".env.example OK - no real-looking credential values found")
           PYEOF
 
   smoke-gate:
