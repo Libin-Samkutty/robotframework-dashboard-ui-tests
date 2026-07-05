@@ -96,6 +96,17 @@ jobs:
           timeout 120 sh -c \
             'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
 
+      - name: Dump Grid container status/logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          echo "--- selenium-hub logs ---"
+          docker compose logs selenium-hub
+          echo "--- chrome logs ---"
+          docker compose logs chrome
+          echo "--- raw status endpoint ---"
+          curl -sv http://localhost:4444/wd/hub/status || true
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -184,6 +195,19 @@ jobs:
         run: |
           timeout 120 sh -c \
             'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
+
+      - name: Dump Grid container status/logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          echo "--- selenium-hub logs ---"
+          docker compose logs selenium-hub
+          echo "--- chrome logs ---"
+          docker compose logs chrome
+          echo "--- firefox logs ---"
+          docker compose logs firefox
+          echo "--- raw status endpoint ---"
+          curl -sv http://localhost:4444/wd/hub/status || true
 
       - uses: actions/setup-python@v5
         with:
