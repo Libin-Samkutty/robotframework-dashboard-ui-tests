@@ -94,7 +94,7 @@ jobs:
       - name: Wait for Grid hub to be ready
         run: |
           timeout 120 sh -c \
-            'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -Eq "\"ready\":[[:space:]]*true"; do sleep 2; done'
 
       - name: Dump Grid container status/logs on failure
         if: failure()
@@ -194,7 +194,7 @@ jobs:
       - name: Wait for Grid hub to be ready
         run: |
           timeout 120 sh -c \
-            'until curl -sf http://localhost:4444/wd/hub/status | grep -q "\"ready\":true"; do sleep 2; done'
+            'until curl -sf http://localhost:4444/wd/hub/status | grep -Eq "\"ready\":[[:space:]]*true"; do sleep 2; done'
 
       - name: Dump Grid container status/logs on failure
         if: failure()
