@@ -3,15 +3,17 @@
 #
 # Usage:
 #   robot --argumentfile argfile.robot web/tests/
-#   robot -A argfile.robot API/tests/
-#   robot --argumentfile argfile.robot --include Smoke .
+#   robot -A argfile.robot api/tests/
+#   robot --argumentfile argfile.robot --include @smoke .
 
 # Environment variables - can be overridden via command line
 --variable    ENV:STAGING
---variable    COUNTRY:INDIA
 
 # Test filtering
---include     Smoke
+--include     @smoke
+
+# Allure listener - emits reports/allure-results/*.json
+--listener    allure_robotframework:reports/allure-results
 
 # Output configuration
 --outputdir   reports

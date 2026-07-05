@@ -2,23 +2,10 @@
 
 # ============================================================================
 # Staging Environment Test Data
-# URLs and environment-specific settings for staging
+# There is only one real target today (practice.expandtesting.com); this file
+# is kept to demonstrate the per-environment testdata pattern from the spec.
+# Real login credentials are documented publicly on the login page itself.
 # ============================================================================
 
-# Environment URLs
-${stage_url_india}                          https://staging.yourdomain.com/summary
-${stage_url_eu}                             https://staging-eu.yourdomain.com/summary
-${stage_url}                                https://staging.yourdomain.com
-
-# Environment Identifier
-${env}                                      # Variable for command-line assignment
-${country}                                  # Variable for command-line assignment
-
-# Test Location Data
-${test_location_india}                      New Delhi
-${test_location_eu}                         London
-${test_location_default}                    Mumbai
-
-# Test Timeouts (staging may have slower responses)
-${api_response_timeout}                     15s
-${page_load_timeout}                        30s
+${login_username}                           %{DEFAULT_USERNAME=practice}
+${login_password}                           %{DEFAULT_PASSWORD=SuperSecretPassword!}

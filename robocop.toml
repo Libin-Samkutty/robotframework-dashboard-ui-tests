@@ -1,0 +1,36 @@
+[tool.robocop.lint]
+ignore = [
+    # This project's established convention (see docs/POM_ARCHITECTURE.md) uses
+    # lowercase variable names throughout every module - keeping this off avoids
+    # a repo-wide rename with no functional benefit.
+    "NAME08",   # section-variable-not-uppercase
+
+    # Deliberate formatting convention already used across every file in the
+    # repo: a blank line after each section header and between sections.
+    "SPC03",    # empty-lines-between-sections
+    "SPC09",    # empty-line-after-section
+
+    # `Set Variable` / `Create Dictionary` are still fully supported in
+    # Robot Framework 7.x; the repo does not use the newer VAR syntax.
+    "DEPR05",   # replace-set-variable-with-var
+    "DEPR06",   # replace-create-with-var
+
+    # SPEC.md's directory tree explicitly names every data/resource file with
+    # a .robot extension, including files with no test cases.
+    "MISC06",   # can-be-resource-file
+
+    # This repo's established convention (see original login_page_test.robot)
+    # places [Tags] before [Documentation] for quick tag-scanning - the
+    # opposite of Robocop's default recommendation.
+    "ORD01",    # test-case-section-out-of-order
+    "ORD02",    # keyword-section-out-of-order
+
+    # Informational suggestions with no correctness value for this repo.
+    "TAG05",    # could-be-test-tags
+    "VAR05",    # no-suite-variable - intentional (shared auth token per suite)
+
+    # Suite-level Documentation is added where it is actually surfaced in
+    # reports (test suite files); data/locator/resource files use the
+    # existing comment-block header convention instead.
+    "DOC03",    # missing-doc-suite
+]

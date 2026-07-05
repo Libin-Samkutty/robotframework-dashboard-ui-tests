@@ -2,26 +2,10 @@
 
 # ============================================================================
 # Production Environment Test Data
-# URLs and environment-specific settings for production
+# There is only one real target today (practice.expandtesting.com); this file
+# is kept to demonstrate the per-environment testdata pattern from the spec.
+# PROD resolves to the same real credentials as STAGING - see MIGRATION.md.
 # ============================================================================
 
-# Environment URLs
-${prod_url_india}                           https://app.yourdomain.com/summary
-${prod_url_eu}                              https://app-eu.yourdomain.com/summary
-${prod_url}                                 https://app.yourdomain.com
-
-# Production Environment Identifier
-${prod_env}                                 PROD
-
-# Test Location Data (Production)
-${prod_location_india}                      Mumbai Production
-${prod_location_eu}                         London Production
-${prod_location_default}                    Delhi Production
-
-# Production Timeouts (should be faster, but set conservatively)
-${prod_api_response_timeout}                10s
-${prod_page_load_timeout}                   20s
-
-# Production-Only Features
-${maintenance_mode_enabled}                 False
-${feature_flags_enabled}                    True
+${login_username}                           %{DEFAULT_USERNAME=practice}
+${login_password}                           %{DEFAULT_PASSWORD=SuperSecretPassword!}

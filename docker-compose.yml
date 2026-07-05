@@ -1,38 +1,76 @@
 # ============================================================================
-# Docker Compose Configuration for Dashboard UI Tests
-# Run tests in a containerized environment with all dependencies
+# Docker Compose Configuration - Selenium Grid + Robot Framework + Allure
 # ============================================================================
 
-version: '3.9'
-
 services:
-  tests:
+  selenium-hub:
+    image: selenium/hub:4.45.0
+    container_name: selenium-hub
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  chrome:
+    image: selenium/node-chrome:4.45.0
+    shm_size: 2gb
+    depends_on:
+      selenium-hub:
+        condition: service_healthy
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 3
+
+  firefox:
+    image: selenium/node-firefox:4.45.0
+    shm_size: 2gb
+    depends_on:
+      selenium-hub:
+        condition: service_healthy
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 3
+
+  robot-tests:
     build:
       context: .
       dockerfile: Dockerfile
-
-    container_name: dashboard-ui-tests-demo
-
-    # Load environment variables from .env file
+    container_name: robot-tests
+    depends_on:
+      selenium-hub:
+        condition: service_healthy
+      chrome:
+        condition: service_started
+      firefox:
+        condition: service_started
     env_file:
       - .env
-
-    # Mount local reports directory for test output
+    environment:
+      REMOTE_URL: http://selenium-hub:4444/wd/hub
+      BASE_URL: https://practice.expandtesting.com
+      ROBOT_LIBRARY_SCOPE: GLOBAL
+      TZ: UTC
     volumes:
       - ./reports:/app/reports
       - ./web:/app/web:ro
-      - ./chatbot:/app/chatbot:ro
-      - ./API:/app/API:ro
-
-    # Environment variables (can override .env)
-    environment:
-      - ROBOT_LIBRARY_SCOPE=GLOBAL
-      - TZ=UTC
-
-    # Run tests on startup
-    # Override with: docker-compose run tests robot <path>
-    command: robot --outputdir reports .
-
-    # Ensure container exits after tests complete
+      - ./api:/app/api:ro
+      - ./shared:/app/shared:ro
+    command: >
+      robot
+      --variable REMOTE_URL:http://selenium-hub:4444/wd/hub
+      --variable BROWSER:chrome
+      --listener allure_robotframework:reports/allure-results
+      --outputdir reports
+      web api
     stdin_open: false
     tty: false
