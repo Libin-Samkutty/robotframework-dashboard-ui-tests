@@ -26,6 +26,7 @@ Playwright repo that targets the same site (see
 11. [Coverage](#coverage)
 12. [Adding New Tests](#adding-new-tests)
 13. [Troubleshooting](#troubleshooting)
+14. [Engineering Decisions](#engineering-decisions)
 
 ---
 
@@ -170,7 +171,9 @@ There is no `chatbot/` module - see
 
 ## Architecture
 
-Full detail in [docs/POM_ARCHITECTURE.md](docs/POM_ARCHITECTURE.md). In
+Full detail in [docs/POM_ARCHITECTURE.md](docs/POM_ARCHITECTURE.md) (code
+layering) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Mermaid diagrams
+of the Docker network, CI/CD pipeline, and pabot parallel execution). In
 short: `shared/` holds cross-module keywords and test data (environment
 resolution, timeouts, generic assertions) so `web/` and `api/` don't each
 redefine them; each module then follows `data/` (locators + testdata) →
@@ -369,6 +372,19 @@ default dialect is semicolon-delimited).
 
 **Tests timeout** - adjust `${default_timeout}` in
 `shared/test_data/shared_testdata.robot`.
+
+---
+
+## Engineering Decisions
+
+[docs/ENGINEERING_DECISIONS.md](docs/ENGINEERING_DECISIONS.md) records the
+non-obvious calls behind this repo's CI/CD and test-execution setup as
+decision records - problem, options, decision, tradeoff, evidence - rather
+than leaving them implicit in config: why `--testlevelsplit` over per-suite
+pabot splitting, why the Grid-readiness check needed a whitespace-tolerant
+regex, why `.env.example` validation scans by key rather than by value, and
+why this repo keeps Robot Framework rather than porting everything to the
+sibling Playwright repo.
 
 ---
 
