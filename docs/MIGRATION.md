@@ -4,7 +4,7 @@
 
 This document describes a portfolio narrative, not a real historical
 migration: this repo and its sibling,
-`libin-samkutty-playwright-web-api-automation-demo`, are both built to target
+`libin-samkutty-playwright-web-api-automation-ts`, are both built to target
 the same real public site, https://practice.expandtesting.com, so that
 together they tell a credible story about migrating browser automation from
 Robot Framework to Playwright while keeping a stable legacy layer running.

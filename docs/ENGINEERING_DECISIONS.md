@@ -150,7 +150,7 @@ reporting in favor of Allure exclusively.
 
 ## ADR-008: Retain Robot Framework for this scope rather than porting to Playwright
 
-**Problem:** This repo's sibling (`libin-samkutty-playwright-web-api-automation-demo`)
+**Problem:** This repo's sibling (`libin-samkutty-playwright-web-api-automation-ts`)
 targets the same site with Playwright. It would be easy to treat that as "the
 newer tool, so migrate everything."
 
