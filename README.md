@@ -306,9 +306,14 @@ than installing Python/Robot/Allure directly on the runner - the runner's
 only job is to orchestrate `docker compose` and shuttle cache/artifact files
 in and out of the bind-mounted `reports/` and `.pabot-history/` directories.
 
-**`nightly.yml`** - scheduled at 02:00 UTC (+ manual dispatch): full Grid run
-on Chrome then Firefox, combined Allure report published to GitHub Pages via
-the `gh-pages` branch, opens a GitHub issue on failure.
+**`nightly.yml`** - its `schedule` trigger is currently commented out (manual
+`workflow_dispatch` only): full Grid run on Chrome then Firefox (both via
+pabot, inside the same `Dockerfile` image as `ci.yml`), combined Allure
+report published to GitHub Pages via the `gh-pages` branch, opens a GitHub
+issue on failure. The `regression-grid` and `notify-on-failure` jobs declare
+explicit `permissions:` (`contents: write` / `issues: write` respectively) -
+without them the default read-only `GITHUB_TOKEN` causes the Pages deploy and
+failure-issue steps to fail with a 403.
 
 > **One-time manual step**: after `nightly.yml`'s first successful run
 > creates the `gh-pages` branch, go to **Settings → Pages → Build and
