@@ -78,8 +78,15 @@ jobs:
       - name: Generate combined Allure report (inside the Dockerfile image)
         if: always()
         run: |
+          # allure generate only reads *-result.json files directly inside
+          # each directory it's given - it does not recurse into
+          # subdirectories. The three suites above each write into their own
+          # subdirectory (reports/allure-results/{web,api,web-firefox}), so
+          # all three must be passed explicitly or the combined report comes
+          # out empty.
           docker compose run --rm --no-deps robot-tests \
-            allure generate reports/allure-results --clean -o reports/allure-report
+            allure generate reports/allure-results/web reports/allure-results/api reports/allure-results/web-firefox \
+              --clean -o reports/allure-report
 
       - name: Upload Allure report artefact
         if: always()
