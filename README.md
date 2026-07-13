@@ -291,11 +291,20 @@ run inside the container too.
 **`ci.yml`** - runs on every push and PR:
 - `lint` - `robocop check web api shared` + a check that `.env.example`
   contains no real-looking (non-placeholder) values
-- `smoke-gate` (needs `lint`) - brings up a minimal Grid (hub + chrome), runs
-  `--include @smoke`, uploads raw Allure results
+- `smoke-gate` (needs `lint`) - brings up a minimal Grid (hub + chrome),
+  builds the `robot-tests` image from the `Dockerfile`, and runs
+  `pabot --include @smoke` *inside that container* via
+  `docker compose run --rm --no-deps robot-tests ...`, uploads raw Allure
+  results
 - `full-regression` (needs `smoke-gate`, PR only) - full Grid (chrome +
-  firefox), runs everything, generates and uploads a rendered Allure report,
-  comments the result on the PR
+  firefox), runs everything inside the same `Dockerfile`-built container,
+  generates the Allure report inside it too (`allure` is baked into the
+  image), uploads the rendered report, comments the result on the PR
+
+Both jobs run pabot and the Allure CLI inside the `Dockerfile` image rather
+than installing Python/Robot/Allure directly on the runner - the runner's
+only job is to orchestrate `docker compose` and shuttle cache/artifact files
+in and out of the bind-mounted `reports/` and `.pabot-history/` directories.
 
 **`nightly.yml`** - scheduled at 02:00 UTC (+ manual dispatch): full Grid run
 on Chrome then Firefox, combined Allure report published to GitHub Pages via
@@ -337,15 +346,17 @@ Robot's own `--report`/log.html as a debug aid alongside it.
 
 ## Coverage
 
-| Module | Suite | Tests | Tags |
-|---|---|---|---|
-| `web/login_suite` | login page | 4 + 4 (CSV) | `@smoke`, `@critical`, `@regression` |
-| `web/dashboard_suite` | `/secure` area | 4 | `@smoke`, `@critical`, `@regression` |
-| `api/smoke` | Notes API health/auth/CRUD | 5 | `@smoke`, `@critical` |
-| `api/negative` | Notes API 401/404/400 | 5 | `@regression`, `@critical` |
+| Module | Suite | Tests | Tags | Status |
+|---|---|---|---|---|
+| `web/login_suite` | login page | 4 + 4 (CSV) | `@smoke`, `@critical`, `@regression` | ✅ PASS |
+| `web/dashboard_suite` | `/secure` area | 4 | `@smoke`, `@critical`, `@regression` | ✅ PASS |
+| `api/smoke` | Notes API health/auth/CRUD | 5 | `@smoke`, `@critical` | ✅ PASS |
+| `api/negative` | Notes API 401/404/400 | 5 | `@regression`, `@critical` | ✅ PASS |
 
-22 test cases total. See [docs/MIGRATION.md](docs/MIGRATION.md) for how this
-compares to the sibling Playwright repo's coverage.
+22 test cases total, all passing as of the latest `full-regression` run (see
+the CI badge above for current status). See
+[docs/MIGRATION.md](docs/MIGRATION.md) for how this compares to the sibling
+Playwright repo's coverage.
 
 ---
 
