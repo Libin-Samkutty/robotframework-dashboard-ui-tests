@@ -1,0 +1,30 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"Verify requesting a protected endpoint with a bogus auth token returns 401","204","Verify Request With Invalid Auth Token Returns 401","Api","2026-07-13","passed","2026-07-13","Negative.Verify Error Responses","Tests","",""
+"Verify the shared test user (registered once for the whole run
+by Suite Setup) can log in and receive an auth token.","178","Verify New User Can Register And Login And Receive Auth Token","Api","2026-07-13","passed","2026-07-13","Smoke.Verify Smoke Scenarios","Tests","",""
+"Verify registering with an invalid email format returns 400.
+This request never succeeds, so no account is ever created
+and no cleanup is required.","141","Verify Registration With Invalid Email Returns 400 Validation Error","Api","2026-07-13","passed","2026-07-13","Negative.Verify Error Responses","Tests","",""
+"Verify the authenticated user can create a note and retrieve it","156","Verify Authenticated User Can Create And Retrieve A Note","Api","2026-07-13","passed","2026-07-13","Smoke.Verify Smoke Scenarios","Tests","",""
+"Verify the authenticated user can retrieve their own profile","101","Verify Authenticated User Can Retrieve Profile","Api","2026-07-13","passed","2026-07-13","Smoke.Verify Smoke Scenarios","Tests","",""
+"Verify a request to a non-existent endpoint returns 404","130","Verify Unknown Endpoint Returns 404 Not Found","Api","2026-07-13","passed","2026-07-13","Negative.Verify Error Responses","Tests","",""
+"Verify the Notes API health check endpoint is up","68","Verify Notes API Health Check Returns Success","Api","2026-07-13","passed","2026-07-13","Smoke.Verify Smoke Scenarios","Tests","",""
+"Verify logging in with incorrect credentials returns 401","154","Verify Login With Incorrect Credentials Returns 401","Api","2026-07-13","passed","2026-07-13","Negative.Verify Error Responses","Tests","",""
+"Verify requesting a protected endpoint with no auth token returns 401","157","Verify Request Without Auth Token Returns 401","Api","2026-07-13","passed","2026-07-13","Negative.Verify Error Responses","Tests","",""
+"Verify the authenticated user can update and then delete a note.
+Creates its own note rather than reusing one from another test -
+under pabot's --testlevelsplit each test runs as an isolated
+suite, so a Suite Variable set by one test is never visible to
+another.","228","Verify Authenticated User Can Update And Delete A Note","Api","2026-07-13","passed","2026-07-13","Smoke.Verify Smoke Scenarios","Tests","",""
+"Verify navigating directly to /secure without logging in redirects to /login","6523","Verify Direct Navigation To Secure Page Without Login Redirects","Web","2026-07-13","passed","2026-07-13","Dashboard Suite.Dashboard Page Test","Tests","",""
+"Verify login fails with an invalid username","7814","Verify User Cannot Login With Invalid Username","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Page Test","Tests","",""
+"Verify logging out from the secure page redirects back to the login page","10796","Verify User Can Log Out From Secure Page","Web","2026-07-13","failed","2026-07-13","Dashboard Suite.Dashboard Page Test","Tests","",""
+"","8803","Invalid password","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Data Driven Test","Tests","",""
+"Verify login fails with an incorrect password","8851","Verify User Cannot Login With Invalid Password","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Page Test","Tests","",""
+"","10091","Valid login","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Data Driven Test","Tests","",""
+"Verify the login page shows a logout confirmation message after logout","7494","Verify Logout Confirmation Message Is Displayed","Web","2026-07-13","failed","2026-07-13","Dashboard Suite.Dashboard Page Test","Tests","",""
+"Verify login page UI elements are displayed correctly","8581","Verify Login Page Loads Successfully","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Page Test","Tests","",""
+"","11654","Empty username field","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Data Driven Test","Tests","",""
+"Verify the secure page renders after a successful login","8766","Verify Authenticated User Sees Secure Area Content","Web","2026-07-13","failed","2026-07-13","Dashboard Suite.Dashboard Page Test","Tests","",""
+"Verify user can successfully login with valid credentials","8549","Verify User Can Login With Valid Credentials","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Page Test","Tests","",""
+"","8578","Invalid username","Web","2026-07-13","passed","2026-07-13","Login Suite.Login Data Driven Test","Tests","",""
