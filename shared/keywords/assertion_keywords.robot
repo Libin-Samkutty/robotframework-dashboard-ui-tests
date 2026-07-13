@@ -14,10 +14,15 @@ Library    SeleniumLibrary
 # ============================================================================
 
 Element Should Be Visible And Contain Text
-    [Documentation]    Wait for an element to be visible, then assert it contains text
+    [Documentation]    Wait for an element to be visible, then wait for it to
+    ...                contain the expected text - a bare visibility check isn't
+    ...                enough where an element id is reused across pages (e.g.
+    ...                the login/secure #flash message): the old page's element
+    ...                can still be visible for an instant during navigation,
+    ...                so the content itself must be polled too, not just presence.
     [Arguments]        ${locator}    ${text}    ${timeout}=${default_timeout}
     Wait Until Element Is Visible    ${locator}    ${timeout}
-    Element Should Contain    ${locator}    ${text}
+    Wait Until Element Contains    ${locator}    ${text}    ${timeout}
 
 Page Should Contain Text Within Timeout
     [Documentation]    Wait for the page to contain the given text
