@@ -9,8 +9,12 @@ Resource    ../../../../shared/keywords/assertion_keywords.robot
 *** Keywords ***
 
 Secure Page Should Load Successfully
-    [Documentation]    Verify the secure page heading and success flash message are visible
-    Element Should Be Visible    ${SECURE_PAGE_HEADING}
+    [Documentation]    Verify the secure page heading and success flash message are visible.
+    ...                Waits for the heading rather than a one-shot check - the
+    ...                login click returns before the /secure navigation finishes,
+    ...                and that race is slow enough on Firefox/geckodriver to fail
+    ...                an immediate check even though the page loads fine shortly after.
+    Wait Until Element Is Visible    ${SECURE_PAGE_HEADING}    ${default_timeout}
     Element Should Be Visible And Contain Text    ${SECURE_FLASH_MESSAGE}    ${LOGIN_SUCCESS_MESSAGE}
 
 User Should See Logout Confirmation Message
