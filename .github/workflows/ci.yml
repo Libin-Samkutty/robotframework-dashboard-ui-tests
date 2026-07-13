@@ -88,6 +88,9 @@ jobs:
         # Pulled as its own step so a cold image cache doesn't eat into the
         # readiness-wait timeout below.
 
+      - name: Build robot-tests image from the Dockerfile
+        run: docker compose build robot-tests
+
       - name: Start minimal Grid (hub + chrome)
         run: docker compose up -d selenium-hub chrome
 
@@ -107,14 +110,6 @@ jobs:
           echo "--- raw status endpoint ---"
           curl -sv http://localhost:4444/wd/hub/status || true
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
       - name: Restore previous run's test timings (for longest-first pabot ordering)
         uses: actions/cache@v4
         with:
@@ -124,23 +119,30 @@ jobs:
             pabot-history-smoke-${{ github.ref_name }}-
             pabot-history-smoke-
 
-      - name: Generate longest-first pabot ordering from history
-        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+      - name: Generate longest-first pabot ordering from history (inside the Dockerfile image)
+        run: |
+          mkdir -p .pabot-history
+          docker compose run --rm --no-deps robot-tests \
+            python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
 
-      - name: Run smoke suite against the Grid (parallel via pabot)
+      - name: Run smoke suite against the Grid (parallel via pabot, inside the Dockerfile image)
         run: |
           # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
           # docker-compose.yml - api tests need no Grid slot at all, so this
           # is a safe upper bound on concurrent web sessions, not a hard cap
           # on parallelism.
-          pabot --testlevelsplit --pabotlib --processes 3 \
-                --ordering reports/pabot_order.txt \
-                --variable REMOTE_URL:http://localhost:4444/wd/hub \
-                --variable BROWSER:chrome \
-                --listener allure_robotframework:reports/allure-results \
-                --include @smoke \
-                --outputdir reports \
-                web api
+          # --no-deps: selenium-hub/chrome are already up from the step above -
+          # without it, `run` would also try to bring up the (unstarted) firefox
+          # dependency declared on the robot-tests service.
+          docker compose run --rm --no-deps robot-tests \
+            pabot --testlevelsplit --pabotlib --processes 3 \
+                  --ordering reports/pabot_order.txt \
+                  --variable REMOTE_URL:http://selenium-hub:4444/wd/hub \
+                  --variable BROWSER:chrome \
+                  --listener allure_robotframework:reports/allure-results \
+                  --include @smoke \
+                  --outputdir reports \
+                  web api
 
       - name: Save test timings for next run's pabot ordering
         if: always()
@@ -188,6 +190,9 @@ jobs:
         # Pulled as its own step so a cold image cache doesn't eat into the
         # readiness-wait timeout below.
 
+      - name: Build robot-tests image from the Dockerfile
+        run: docker compose build robot-tests
+
       - name: Start full Grid (hub + chrome + firefox)
         run: docker compose up -d selenium-hub chrome firefox
 
@@ -209,14 +214,6 @@ jobs:
           echo "--- raw status endpoint ---"
           curl -sv http://localhost:4444/wd/hub/status || true
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
       - name: Restore previous run's test timings (for longest-first pabot ordering)
         uses: actions/cache@v4
         with:
@@ -226,22 +223,28 @@ jobs:
             pabot-history-full-${{ github.ref_name }}-
             pabot-history-full-
 
-      - name: Generate longest-first pabot ordering from history
-        run: python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
+      - name: Generate longest-first pabot ordering from history (inside the Dockerfile image)
+        run: |
+          mkdir -p .pabot-history
+          docker compose run --rm --no-deps robot-tests \
+            python scripts/generate_pabot_ordering.py .pabot-history/output.xml reports/pabot_order.txt
 
-      - name: Run full suite (web + api, parallel via pabot)
+      - name: Run full suite (web + api, parallel via pabot, inside the Dockerfile image)
         run: |
           # --processes 3 matches chrome's SE_NODE_MAX_SESSIONS in
           # docker-compose.yml - api tests need no Grid slot at all, so this
           # is a safe upper bound on concurrent web sessions, not a hard cap
           # on parallelism.
-          pabot --testlevelsplit --pabotlib --processes 3 \
-                --ordering reports/pabot_order.txt \
-                --variable REMOTE_URL:http://localhost:4444/wd/hub \
-                --variable BROWSER:chrome \
-                --listener allure_robotframework:reports/allure-results \
-                --outputdir reports \
-                web api
+          # --no-deps: selenium-hub/chrome/firefox are already up from the
+          # step above.
+          docker compose run --rm --no-deps robot-tests \
+            pabot --testlevelsplit --pabotlib --processes 3 \
+                  --ordering reports/pabot_order.txt \
+                  --variable REMOTE_URL:http://selenium-hub:4444/wd/hub \
+                  --variable BROWSER:chrome \
+                  --listener allure_robotframework:reports/allure-results \
+                  --outputdir reports \
+                  web api
 
       - name: Save test timings for next run's pabot ordering
         if: always()
@@ -253,28 +256,15 @@ jobs:
             echo "No reports/output.xml (tests never ran) - nothing to save."
           fi
 
+      - name: Generate Allure report (inside the Dockerfile image)
+        if: always()
+        run: |
+          docker compose run --rm --no-deps robot-tests \
+            allure generate reports/allure-results --clean -o reports/allure-report
+
       - name: Tear down Grid
         if: always()
         run: docker compose down -v
-
-      - name: Set up JRE for the Allure CLI
-        if: always()
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install Allure CLI
-        if: always()
-        run: |
-          curl -fsSL https://github.com/allure-framework/allure2/releases/download/2.44.0/allure-2.44.0.tgz \
-            -o /tmp/allure.tgz
-          sudo tar -xzf /tmp/allure.tgz -C /opt
-          sudo ln -s /opt/allure-2.44.0/bin/allure /usr/local/bin/allure
-
-      - name: Generate Allure report
-        if: always()
-        run: allure generate reports/allure-results --clean -o reports/allure-report
 
       - name: Upload Allure report artefact
         if: always()
