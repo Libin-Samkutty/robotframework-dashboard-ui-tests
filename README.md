@@ -1,7 +1,8 @@
 # Robot Framework Automation - practice.expandtesting.com
 
-[![CI](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/ci.yml)
-[![Nightly Regression](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/nightly.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests-demo/actions/workflows/nightly.yml)
+[![CI](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests/actions/workflows/ci.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests/actions/workflows/ci.yml)
+[![Nightly Regression](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests/actions/workflows/nightly.yml/badge.svg)](https://github.com/Libin-Samkutty/robotframework-dashboard-ui-tests/actions/workflows/nightly.yml)
+[![Allure Report](https://img.shields.io/badge/Allure%20Report-view-blue)](https://libin-samkutty.github.io/robotframework-dashboard-ui-tests/)
 
 Robot Framework test automation targeting the real public site
 [practice.expandtesting.com](https://practice.expandtesting.com) - web UI
@@ -315,10 +316,8 @@ explicit `permissions:` (`contents: write` / `issues: write` respectively) -
 without them the default read-only `GITHUB_TOKEN` causes the Pages deploy and
 failure-issue steps to fail with a 403.
 
-> **One-time manual step**: after `nightly.yml`'s first successful run
-> creates the `gh-pages` branch, go to **Settings → Pages → Build and
-> deployment → Source** and select the `gh-pages` branch. This can't be done
-> from the workflow itself.
+Live report: **https://libin-samkutty.github.io/robotframework-dashboard-ui-tests/**
+(GitHub Pages is configured to serve the `gh-pages` branch).
 
 No secrets are configured or required: the web login credentials are
 practice.expandtesting.com's own publicly documented demo credentials, and
