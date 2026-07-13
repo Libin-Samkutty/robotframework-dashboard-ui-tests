@@ -428,6 +428,29 @@ In priority order:
 
 ---
 
+## Roadmap Note: Eventual Full Retirement (Not Built This Pass)
+
+This repo's narrative currently ends at "Robot retains API automation and
+the chatbot widget while Playwright takes over UI" — a permanent-sounding
+split. The fuller, real story doesn't stop there: Robot Framework's
+remaining role (its API regression suite) was itself eventually retired
+years later, on a measured trigger — a routine dependency conflict in a
+shared Docker base image — rather than a theoretical one. The suite was
+ported into an existing Pytest fixture layer via a POC on the
+highest-traffic cases first, then run side-by-side with the old suite for
+one full release cycle to confirm zero divergence before decommissioning
+anything.
+
+This is documented here only as a forward reference so this spec doesn't
+contradict that fuller arc once it's built out — no build work for a
+Pytest port, a parallel-run comparison, or a decommissioning step is
+scoped in this pass. Robot Framework itself also continues, separately,
+as an org-wide API automation base framework outside this specific
+platform's scope — that continuity is unaffected by this platform's own
+retirement.
+
+---
+
 ## Definition of Done
 
 - [ ] `docker-compose up` runs all tests headlessly against Selenium Grid

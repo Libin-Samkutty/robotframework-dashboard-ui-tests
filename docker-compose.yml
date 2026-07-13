@@ -45,7 +45,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: robot-tests
+    # No fixed container_name: CI invokes this service multiple times per job
+    # via `docker compose run` (ordering, pabot, allure generate) - a static
+    # name would risk a "name already in use" conflict between those calls if
+    # a prior one didn't clean up in time.
     depends_on:
       selenium-hub:
         condition: service_healthy
@@ -65,6 +68,7 @@ services:
       - ./web:/app/web:ro
       - ./api:/app/api:ro
       - ./shared:/app/shared:ro
+      - ./.pabot-history:/app/.pabot-history
     command: >
       robot
       --variable REMOTE_URL:http://selenium-hub:4444/wd/hub
