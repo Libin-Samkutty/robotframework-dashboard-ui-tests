@@ -19,8 +19,21 @@ jobs:
   regression-grid:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Create .env for docker compose
+        run: cp .env.example .env
+        # docker compose validates env_file for every service in the compose
+        # file (not just the ones being started), so `docker compose down`
+        # fails without this even though the robot-tests service is never
+        # started via `up` here - no secrets involved, this is the same
+        # placeholder-only file from .env.example (see ci.yml).
+
+      - name: Build robot-tests image from the Dockerfile
+        run: docker compose build robot-tests
 
       - name: Start full Grid (Chrome + Firefox)
         run: docker compose up -d selenium-hub chrome firefox
@@ -30,58 +43,43 @@ jobs:
           timeout 60 sh -c \
             'until curl -sf http://localhost:4444/wd/hub/status | grep -Eq "\"ready\":[[:space:]]*true"; do sleep 2; done'
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run web suite on Chrome
+      - name: Run web suite on Chrome (parallel via pabot, inside the Dockerfile image)
         run: |
-          robot --variable REMOTE_URL:http://localhost:4444/wd/hub \
-                --variable BROWSER:chrome \
-                --listener allure_robotframework:reports/allure-results/web \
-                --outputdir reports/web \
-                web
+          docker compose run --rm --no-deps robot-tests \
+            pabot --testlevelsplit --pabotlib --processes 3 \
+                  --variable REMOTE_URL:http://selenium-hub:4444/wd/hub \
+                  --variable BROWSER:chrome \
+                  --listener allure_robotframework:reports/allure-results/web \
+                  --outputdir reports/web \
+                  web
 
-      - name: Run api suite (no browser needed)
+      - name: Run api suite (parallel via pabot, no browser needed)
         run: |
-          robot --listener allure_robotframework:reports/allure-results/api \
-                --outputdir reports/api \
-                api
+          docker compose run --rm --no-deps robot-tests \
+            pabot --testlevelsplit --pabotlib --processes 3 \
+                  --listener allure_robotframework:reports/allure-results/api \
+                  --outputdir reports/api \
+                  api
 
-      - name: Run web suite on Firefox (cross-browser regression pass)
+      - name: Run web suite on Firefox (cross-browser regression pass, parallel via pabot)
         run: |
-          robot --variable REMOTE_URL:http://localhost:4444/wd/hub \
-                --variable BROWSER:firefox \
-                --listener allure_robotframework:reports/allure-results/web-firefox \
-                --outputdir reports/web-firefox \
-                web
+          docker compose run --rm --no-deps robot-tests \
+            pabot --testlevelsplit --pabotlib --processes 3 \
+                  --variable REMOTE_URL:http://selenium-hub:4444/wd/hub \
+                  --variable BROWSER:firefox \
+                  --listener allure_robotframework:reports/allure-results/web-firefox \
+                  --outputdir reports/web-firefox \
+                  web
 
       - name: Tear down Grid
         if: always()
         run: docker compose down -v
 
-      - name: Set up JRE for the Allure CLI
-        if: always()
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install Allure CLI
+      - name: Generate combined Allure report (inside the Dockerfile image)
         if: always()
         run: |
-          curl -fsSL https://github.com/allure-framework/allure2/releases/download/2.44.0/allure-2.44.0.tgz \
-            -o /tmp/allure.tgz
-          sudo tar -xzf /tmp/allure.tgz -C /opt
-          sudo ln -s /opt/allure-2.44.0/bin/allure /usr/local/bin/allure
-
-      - name: Generate combined Allure report
-        if: always()
-        run: allure generate reports/allure-results --clean -o reports/allure-report
+          docker compose run --rm --no-deps robot-tests \
+            allure generate reports/allure-results --clean -o reports/allure-report
 
       - name: Upload Allure report artefact
         if: always()
@@ -103,6 +101,8 @@ jobs:
     needs: regression-grid
     if: failure()
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Open a failure issue
         uses: actions/github-script@v7
